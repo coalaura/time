@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -51,11 +52,41 @@ func formatTime(d time.Duration) string {
 		d = 0
 	}
 
-	totalSeconds := d.Seconds()
-	minutes := int(totalSeconds) / 60
-	seconds := totalSeconds - float64(minutes*60)
+	if d == 0 {
+		return "0s"
+	}
 
-	return fmt.Sprintf("%dm%.3fs", minutes, seconds)
+	type unit struct {
+		value  time.Duration
+		suffix string
+	}
+
+	units := []unit{
+		{time.Hour, "h"},
+		{time.Minute, "m"},
+		{time.Second, "s"},
+		{time.Millisecond, "ms"},
+		{time.Microsecond, "µs"},
+	}
+
+	parts := make([]string, 0, len(units))
+
+	for _, unit := range units {
+		if d < unit.value {
+			continue
+		}
+
+		count := d / unit.value
+		d -= count * unit.value
+
+		parts = append(parts, fmt.Sprintf("%d%s", count, unit.suffix))
+	}
+
+	if len(parts) == 0 {
+		return fmt.Sprintf("%dns", d/time.Nanosecond)
+	}
+
+	return strings.Join(parts, " ")
 }
 
 func exitCode(err *exec.ExitError) int {
