@@ -9,11 +9,21 @@ import (
 	"time"
 )
 
+var Version = "dev"
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: time <command> [args...]")
 
 		os.Exit(1)
+	}
+
+	for _, arg := range os.Args[1:] {
+		if arg == "-v" || arg == "--version" {
+			fmt.Printf("time %s\n", Version)
+
+			os.Exit(0)
+		}
 	}
 
 	cmd := exec.Command(os.Args[1], os.Args[2:]...)
