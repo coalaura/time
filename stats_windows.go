@@ -89,6 +89,23 @@ func collectStats(h ProcessHandle, ps *os.ProcessState, setup, execTime, real ti
 
 	handle := syscall.Handle(h.h)
 
+	var (
+		cTime syscall.Filetime
+		eTime syscall.Filetime
+		kTime syscall.Filetime
+		uTime syscall.Filetime
+	)
+
+	err := syscall.GetProcessTimes(handle, &cTime, &eTime, &kTime, &uTime)
+	if err == nil {
+		c := cTime.Nanoseconds()
+		e := eTime.Nanoseconds()
+
+		if c > 0 && e > c {
+			stats.Exec = time.Duration(e - c)
+		}
+	}
+
 	var pmc processMemoryCounters
 
 	pmc.CB = uint32(unsafe.Sizeof(pmc))
@@ -122,11 +139,11 @@ func (s WindowsStats) entries() []StatEntry {
 	}
 
 	if s.PeakWorkingSet > 0 {
-		e = append(e, StatEntry{"peakws", formatBytes(s.PeakWorkingSet), "Peak working set size (physical memory)", GroupMemory})
+		e = append(e, StatEntry{"maxrss", formatBytes(s.PeakWorkingSet), "Peak physical memory usage", GroupMemory})
 	}
 
 	if s.PageFaults > 0 {
-		e = append(e, StatEntry{"pageflt", fmt.Sprintf("%d", s.PageFaults), "Page faults (soft + hard combined)", GroupMemory})
+		e = append(e, StatEntry{"pageflt", fmt.Sprintf("%d", s.PageFaults), "Total page faults", GroupMemory})
 	}
 
 	if s.ReadOps > 0 {

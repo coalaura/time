@@ -3,11 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -76,30 +76,34 @@ func readProcIO(pid int) *linuxIOStats {
 
 	stats := &linuxIOStats{}
 
-	for _, line := range strings.Split(string(data), "\n") {
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 {
+	for len(data) > 0 {
+		var line []byte
+
+		line, data, _ = bytes.Cut(data, []byte{'\n'})
+
+		key, val, ok := bytes.Cut(line, []byte{':'})
+		if !ok {
 			continue
 		}
 
-		val, err := strconv.ParseUint(strings.TrimSpace(parts[1]), 10, 64)
+		v, err := strconv.ParseUint(string(bytes.TrimSpace(val)), 10, 64)
 		if err != nil {
 			continue
 		}
 
-		switch strings.TrimSpace(parts[0]) {
+		switch string(key) {
 		case "rchar":
-			stats.rchar = val
+			stats.rchar = v
 		case "wchar":
-			stats.wchar = val
+			stats.wchar = v
 		case "syscr":
-			stats.syscr = val
+			stats.syscr = v
 		case "syscw":
-			stats.syscw = val
+			stats.syscw = v
 		case "read_bytes":
-			stats.readBytes = val
+			stats.readBytes = v
 		case "write_bytes":
-			stats.writeBytes = val
+			stats.writeBytes = v
 		}
 	}
 
@@ -114,10 +118,7 @@ func collectStats(_ ProcessHandle, ps *os.ProcessState, setup, execTime, real ti
 		},
 	}
 
-	var ru syscall.Rusage
-
-	err := syscall.Getrusage(syscall.RUSAGE_CHILDREN, &ru)
-	if err == nil {
+	if ru, ok := ps.SysUsage().(*syscall.Rusage); ok {
 		stats.MaxRSS = uint64(ru.Maxrss) * 1024
 		stats.MinorFaults = uint64(ru.Minflt)
 		stats.MajorFaults = uint64(ru.Majflt)
@@ -140,23 +141,24 @@ func (s LinuxStats) entries() []StatEntry {
 	}
 
 	if s.MaxRSS > 0 {
-		e = append(e, StatEntry{"maxrss", formatBytes(s.MaxRSS), "Peak resident set size (physical memory)", GroupMemory})
+		e = append(e, StatEntry{"maxrss", formatBytes(s.MaxRSS), "Peak physical memory usage", GroupMemory})
 	}
 
-	if s.MinorFaults > 0 {
-		e = append(e, StatEntry{"minflt", fmt.Sprintf("%d", s.MinorFaults), "Minor page faults (no disk I/O)", GroupMemory})
+	pageFlt := s.MinorFaults + s.MajorFaults
+	if pageFlt > 0 {
+		e = append(e, StatEntry{"pageflt", fmt.Sprintf("%d", pageFlt), "Total page faults", GroupMemory})
 	}
 
 	if s.MajorFaults > 0 {
-		e = append(e, StatEntry{"majflt", fmt.Sprintf("%d", s.MajorFaults), "Major page faults (required disk read)", GroupMemory})
+		e = append(e, StatEntry{"majflt", fmt.Sprintf("%d", s.MajorFaults), "Major page faults (disk read)", GroupMemory})
 	}
 
 	if s.InputBlocks > 0 {
-		e = append(e, StatEntry{"inblock", fmt.Sprintf("%d", s.InputBlocks), "Block reads from filesystem (512-byte units)", GroupIO})
+		e = append(e, StatEntry{"inblock", fmt.Sprintf("%d", s.InputBlocks), "Block reads from filesystem", GroupIO})
 	}
 
 	if s.OutputBlocks > 0 {
-		e = append(e, StatEntry{"oublock", fmt.Sprintf("%d", s.OutputBlocks), "Block writes to filesystem (512-byte units)", GroupIO})
+		e = append(e, StatEntry{"oublock", fmt.Sprintf("%d", s.OutputBlocks), "Block writes to filesystem", GroupIO})
 	}
 
 	if s.VoluntaryCSW > 0 {
@@ -179,27 +181,19 @@ func (s LinuxStats) ioEntries(data any) []StatEntry {
 	var e []StatEntry
 
 	if io.syscr > 0 {
-		e = append(e, StatEntry{"syscr", fmt.Sprintf("%d", io.syscr), "Read syscalls", GroupIO})
+		e = append(e, StatEntry{"reads", fmt.Sprintf("%d (%s)", io.syscr, formatBytes(io.rchar)), "Read operations and bytes transferred", GroupIO})
 	}
 
 	if io.syscw > 0 {
-		e = append(e, StatEntry{"syscw", fmt.Sprintf("%d", io.syscw), "Write syscalls", GroupIO})
+		e = append(e, StatEntry{"writes", fmt.Sprintf("%d (%s)", io.syscw, formatBytes(io.wchar)), "Write operations and bytes transferred", GroupIO})
 	}
 
 	if io.readBytes > 0 {
-		e = append(e, StatEntry{"read", formatBytes(io.readBytes), "Bytes read from storage (not cache)", GroupIO})
+		e = append(e, StatEntry{"diskread", formatBytes(io.readBytes), "Physical disk read bytes", GroupIO})
 	}
 
 	if io.writeBytes > 0 {
-		e = append(e, StatEntry{"write", formatBytes(io.writeBytes), "Bytes written to storage", GroupIO})
-	}
-
-	if io.rchar > 0 {
-		e = append(e, StatEntry{"rchar", formatBytes(io.rchar), "Bytes read (including from cache)", GroupIO})
-	}
-
-	if io.wchar > 0 {
-		e = append(e, StatEntry{"wchar", formatBytes(io.wchar), "Bytes written", GroupIO})
+		e = append(e, StatEntry{"diskwrite", formatBytes(io.writeBytes), "Physical disk write bytes", GroupIO})
 	}
 
 	return e

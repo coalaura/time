@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -95,7 +96,8 @@ func main() {
 
 	setupStart := time.Now()
 	startErr := cmd.Start()
-	setup := time.Since(setupStart)
+	execStart := time.Now()
+	setup := execStart.Sub(setupStart)
 
 	if startErr != nil {
 		fmt.Fprintf(os.Stderr, "time: failed to start command: %v\n", startErr)
@@ -106,7 +108,6 @@ func main() {
 	handle := acquireHandle(cmd)
 	defer releaseHandle(handle)
 
-	execStart := time.Now()
 	ioResult := collectIOBeforeWait(cmd.Process.Pid)
 	waitErr := cmd.Wait()
 
@@ -165,7 +166,9 @@ func formatTime(d time.Duration) string {
 		{time.Microsecond, "µs"},
 	}
 
-	parts := make([]string, 0, len(units))
+	var b strings.Builder
+
+	b.Grow(16)
 
 	for _, unit := range units {
 		if d < unit.value {
@@ -175,14 +178,20 @@ func formatTime(d time.Duration) string {
 		count := d / unit.value
 		d -= count * unit.value
 
-		parts = append(parts, fmt.Sprintf("%d%s", count, unit.suffix))
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+
+		b.WriteString(strconv.FormatInt(int64(count), 10))
+		b.WriteString(unit.suffix)
 	}
 
-	if len(parts) == 0 {
-		return fmt.Sprintf("%dns", d/time.Nanosecond)
+	if b.Len() == 0 {
+		b.WriteString(strconv.FormatInt(int64(d/time.Nanosecond), 10))
+		b.WriteString("ns")
 	}
 
-	return strings.Join(parts, " ")
+	return b.String()
 }
 
 func exitCode(err *exec.ExitError) int {

@@ -40,7 +40,7 @@ exec    5ms 186µs
 user    15ms 625µs
 sys     0s
 
-peakws  7.4MB
+maxrss  7.4MB
 pageflt 1984
 
 reads   1 (128KB)
@@ -66,22 +66,16 @@ setup   2ms 576µs
 | user | ✓ | ✓ | ✓ |
 | sys | ✓ | ✓ | ✓ |
 | **Memory** | | | |
-| maxrss | ✓ | - | - |
-| peakws | - | ✓ | - |
-| minflt | ✓ | - | - |
+| maxrss | ✓ | ✓ | - |
+| pageflt | ✓ | ✓ | - |
 | majflt | ✓ | - | - |
-| pageflt | - | ✓ | - |
 | **I/O** | | | |
+| reads | ✓ | ✓ | - |
+| writes | ✓ | ✓ | - |
+| diskread | ✓ | - | - |
+| diskwrite | ✓ | - | - |
 | inblock | ✓ | - | - |
 | oublock | ✓ | - | - |
-| syscr | ✓ | - | - |
-| syscw | ✓ | - | - |
-| read | ✓ | - | - |
-| write | ✓ | - | - |
-| rchar | ✓ | - | - |
-| wchar | ✓ | - | - |
-| reads | - | ✓ | - |
-| writes | - | ✓ | - |
 | **Context switches** | | | |
 | nvcsw | ✓ | - | - |
 | nivcsw | ✓ | - | - |
