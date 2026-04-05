@@ -12,47 +12,119 @@ import (
 var Version = "dev"
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: time <command> [args...]")
+	var (
+		version bool
+		explain bool
+		full    bool
+	)
+
+	args := os.Args[1:]
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		if arg == "--" {
+			args = args[i+1:]
+
+			break
+		}
+
+		if strings.HasPrefix(arg, "--") {
+			switch arg {
+			case "--version":
+				version = true
+			case "--explain":
+				explain = true
+			case "--full":
+				full = true
+			default:
+				break
+			}
+
+			args = append(args[:i], args[i+1:]...)
+
+			i--
+
+			continue
+		}
+
+		if strings.HasPrefix(arg, "-") && len(arg) > 1 {
+			var consumed bool
+
+			for _, c := range arg[1:] {
+				switch c {
+				case 'v':
+					version = true
+					consumed = true
+				case 'e':
+					explain = true
+					consumed = true
+				case 'f':
+					full = true
+					consumed = true
+				}
+			}
+
+			if consumed {
+				args = append(args[:i], args[i+1:]...)
+
+				i--
+			}
+		}
+	}
+
+	if version {
+		fmt.Printf("time %s\n", Version)
+
+		os.Exit(0)
+	}
+
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: time [-f|--full] [-e|--explain] [-v|--version] <command> [args...]")
 
 		os.Exit(1)
 	}
 
-	for _, arg := range os.Args[1:] {
-		if arg == "-v" || arg == "--version" {
-			fmt.Printf("time %s\n", Version)
-
-			os.Exit(0)
-		}
-	}
-
-	cmd := exec.Command(os.Args[1], os.Args[2:]...)
+	cmd := exec.Command(args[0], args[1:]...)
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	start := time.Now()
+	totalStart := time.Now()
 
-	err := cmd.Run()
+	setupStart := time.Now()
+	startErr := cmd.Start()
+	setup := time.Since(setupStart)
 
-	real := time.Since(start)
+	if startErr != nil {
+		fmt.Fprintf(os.Stderr, "time: failed to start command: %v\n", startErr)
 
-	user, sys := getCPUTime(cmd.ProcessState)
+		os.Exit(1)
+	}
 
-	fmt.Fprintf(os.Stderr, "real\t%s\n", formatTime(real))
-	fmt.Fprintf(os.Stderr, "user\t%s\n", formatTime(user))
-	fmt.Fprintf(os.Stderr, "sys\t%s\n", formatTime(sys))
+	handle := acquireHandle(cmd)
+	defer releaseHandle(handle)
 
-	if err == nil {
+	execStart := time.Now()
+	waitErr := cmd.Wait()
+	execTime := time.Since(execStart)
+
+	real := time.Since(totalStart)
+
+	stats := collectStats(handle, cmd.ProcessState, setup, execTime, real)
+
+	printStats(stats.entries(), explain, full)
+
+	if waitErr == nil {
 		os.Exit(0)
 	}
 
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	if exitErr, ok := waitErr.(*exec.ExitError); ok {
 		os.Exit(exitCode(exitErr))
 	}
 
-	fmt.Fprintf(os.Stderr, "time: failed to run command: %v\n", err)
+	fmt.Fprintf(os.Stderr, "time: failed to run command: %v\n", waitErr)
 
 	os.Exit(1)
 }
@@ -109,15 +181,4 @@ func exitCode(err *exec.ExitError) int {
 	}
 
 	return 1
-}
-
-func getCPUTime(ps *os.ProcessState) (user, sys time.Duration) {
-	if ps == nil {
-		return 0, 0
-	}
-
-	user = ps.UserTime()
-	sys = ps.SystemTime()
-
-	return user, sys
 }
