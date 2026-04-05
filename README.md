@@ -74,6 +74,12 @@ setup   2ms 576µs
 | **I/O** | | | |
 | inblock | ✓ | - | - |
 | oublock | ✓ | - | - |
+| syscr | ✓ | - | - |
+| syscw | ✓ | - | - |
+| read | ✓ | - | - |
+| write | ✓ | - | - |
+| rchar | ✓ | - | - |
+| wchar | ✓ | - | - |
 | reads | - | ✓ | - |
 | writes | - | ✓ | - |
 | **Context switches** | | | |
