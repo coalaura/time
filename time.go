@@ -107,14 +107,28 @@ func main() {
 	defer releaseHandle(handle)
 
 	execStart := time.Now()
+	ioResult := collectIOBeforeWait(cmd.Process.Pid)
 	waitErr := cmd.Wait()
-	execTime := time.Since(execStart)
+
+	var execTime time.Duration
+
+	if !ioResult.exitedAt.IsZero() {
+		execTime = ioResult.exitedAt.Sub(execStart)
+	} else {
+		execTime = time.Since(execStart)
+	}
 
 	real := time.Since(totalStart)
 
 	stats := collectStats(handle, cmd.ProcessState, setup, execTime, real)
 
-	printStats(stats.entries(), explain, full)
+	var ioEntries []StatEntry
+
+	if s, ok := any(stats).(statsWithIO); ok {
+		ioEntries = s.ioEntries(ioResult.data)
+	}
+
+	printStats(stats.entries(), ioEntries, explain, full)
 
 	if waitErr == nil {
 		os.Exit(0)

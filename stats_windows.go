@@ -71,6 +71,10 @@ func releaseHandle(h ProcessHandle) {
 	}
 }
 
+func collectIOBeforeWait(_ int) ioResult {
+	return ioResult{}
+}
+
 func collectStats(h ProcessHandle, ps *os.ProcessState, setup, execTime, real time.Duration) WindowsStats {
 	stats := WindowsStats{
 		ProcessStats: ProcessStats{

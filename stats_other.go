@@ -14,6 +14,10 @@ func acquireHandle(cmd *exec.Cmd) ProcessHandle {
 
 func releaseHandle(_ ProcessHandle) {}
 
+func collectIOBeforeWait(_ int) ioResult {
+	return ioResult{}
+}
+
 func collectStats(_ ProcessHandle, ps *os.ProcessState, setup, execTime, real time.Duration) ProcessStats {
 	return ProcessStats{
 		Real: real, Setup: setup, Exec: execTime,

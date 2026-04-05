@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+const (
+	GroupTime = iota
+	GroupMemory
+	GroupIO
+	GroupSwitches
+
+	KB = 1024
+	MB = KB * 1024
+	GB = MB * 1024
+)
+
 type ProcessStats struct {
 	Real  time.Duration
 	Setup time.Duration
@@ -25,16 +36,15 @@ type StatEntry struct {
 	Group   int
 }
 
-const (
-	GroupTime = iota
-	GroupMemory
-	GroupIO
-	GroupSwitches
+type ioResult struct {
+	data     any
+	exitedAt time.Time
+}
 
-	KB = 1024
-	MB = KB * 1024
-	GB = MB * 1024
-)
+type statsWithIO interface {
+	entries() []StatEntry
+	ioEntries(any) []StatEntry
+}
 
 func formatBytes(b uint64) string {
 	switch {
@@ -49,7 +59,7 @@ func formatBytes(b uint64) string {
 	}
 }
 
-func printStats(entries []StatEntry, explain bool, full bool) {
+func printStats(entries []StatEntry, ioEntries []StatEntry, explain bool, full bool) {
 	if !full {
 		var (
 			real string
@@ -75,9 +85,11 @@ func printStats(entries []StatEntry, explain bool, full bool) {
 		return
 	}
 
+	all := append(entries, ioEntries...)
+
 	lastGroup := -1
 
-	for _, e := range entries {
+	for _, e := range all {
 		if e.Group != lastGroup && lastGroup != -1 {
 			fmt.Fprintln(os.Stderr)
 		}
